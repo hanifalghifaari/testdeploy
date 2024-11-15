@@ -1,7 +1,15 @@
 {
-  "build": {
-    "env": {
-      "TF_CPP_MIN_LOG_LEVEL": "2"
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/predict_image",
+      "dest": "/app.py"
+    }
+  ]
 }
