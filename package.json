@@ -1,0 +1,11 @@
+{
+  "name": "my-vercel-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^3.9.0"
+  },
+  "scripts": {
+    "start": "next start",
+    "build": "next build"
+  }
+}
