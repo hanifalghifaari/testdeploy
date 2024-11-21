@@ -8,7 +8,10 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from tensorflow.keras.applications.xception import preprocess_input as xception_preprocess_input
 import google.generativeai as genai
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
 
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
 
 # Load models
@@ -19,7 +22,7 @@ model_inception = tf.keras.models.load_model(
     MODEL_PATH_INCEPTION, compile=False)
 
 # Configure the API key
-genai.configure(api_key="AIzaSyDvUwKvNSQbOy9fwmtiN87BT8ADgTpeYfI")
+genai.configure(api_key="API_KEY")
 
 # Create the model
 generation_config = {
