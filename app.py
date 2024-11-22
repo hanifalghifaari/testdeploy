@@ -9,11 +9,24 @@ from tensorflow.keras.applications.xception import preprocess_input as xception_
 import google.generativeai as genai
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+import google.cloud.secretmanager as secretmanager
 
 app = Flask(__name__)
 
-load_dotenv()
-API_KEY = os.getenv("API_KEY")
+# Mengakses API Key dari Secret Manager
+
+
+def get_secret(secret_name):
+    client = secretmanager.SecretManagerServiceClient()
+    project_id = 'your-project-id'
+    secret_version = f'projects/{project_id}/secrets/{secret_name}/versions/latest'
+    response = client.access_secret_version(name=secret_version)
+    return response.payload.data.decode('UTF-8')
+
+
+# Gantilah 'my-api-key' dengan nama secret Anda
+API_KEY = get_secret('my-api-key')
+
 # Load models
 MODEL_PATH_XCEPTION = "model/model_xception.keras"
 MODEL_PATH_INCEPTION = "model\InceptionV3.keras"
