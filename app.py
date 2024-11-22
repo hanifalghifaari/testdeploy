@@ -10,10 +10,10 @@ import google.generativeai as genai
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-load_dotenv()
-API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
 
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 # Load models
 MODEL_PATH_XCEPTION = "model/model_xception.keras"
 MODEL_PATH_INCEPTION = "model\InceptionV3.keras"
@@ -22,7 +22,7 @@ model_inception = tf.keras.models.load_model(
     MODEL_PATH_INCEPTION, compile=False)
 
 # Configure the API key
-genai.configure(api_key="API_KEY")
+genai.configure(api_key=API_KEY)
 
 # Create the model
 generation_config = {
@@ -84,10 +84,10 @@ def allowed_file(filename):
 
 def preprocess_image(image_path, model_name):
     img = load_img(image_path, target_size=(299, 299)
-                   if model_name == "inception" else (300, 300))
+                   if model_name == "inceptionV3" else (300, 300))
     img_array = img_to_array(img)  # Konversi gambar menjadi array
     img_array = np.expand_dims(img_array, axis=0)  # Tambah dimensi batch
-    if model_name == "inception":
+    if model_name == "inceptionV3":
         img_array /= 255.0  # Preprocessing sesuai InceptionV3
     else:
         img_array = xception_preprocess_input(
@@ -141,7 +141,7 @@ def predict_image():
         img_array = preprocess_image(file_path, model_choice)
 
         # Choose model based on user input
-        if model_choice == "inception":
+        if model_choice == "inceptionV3":
             model = model_inception
         else:
             model = model_xception
@@ -171,8 +171,7 @@ def predict_image():
              - ♻️ Gunakan kemasan ramah lingkungan.\n\n
         5. **Fakta Keberlanjutan**:
            - Sertakan fakta penting tentang jejak karbon makanan (contoh: "Tahu memiliki jejak karbon 10x lebih rendah daripada daging sapi.")\n\n
-        6. **Penutupan dengan Kutipan**:
-           - Berikan kutipan yang menginspirasi tentang pentingnya mengurangi jejak karbon makanan untuk perubahan iklim.\n\n
+        6. - Berikan kutipan yang menginspirasi tentang pentingnya mengurangi jejak karbon makanan untuk perubahan iklim.\n\n
         **Referensi Data untuk Perhitungan Emisi**:
         (Data emisi karbon seperti apel, pisang, daging sapi, dsb.)
         """
