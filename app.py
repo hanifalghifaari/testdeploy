@@ -10,34 +10,43 @@ import google.generativeai as genai
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import google.cloud.secretmanager as secretmanager
+import base64
+import vertexai
+from vertexai.generative_models import GenerativeModel, SafetySetting
 
 app = Flask(__name__)
-
-# Mengakses API Key dari Secret Manager
-
-# def get_secret(secret_name):
-#     client = secretmanager.SecretManagerServiceClient()
-#     project_id = 'your-project-id'
-#     secret_version = f'projects/{project_id}/secrets/{secret_name}/versions/latest'
-#     response = client.access_secret_version(name=secret_version)
-#     return response.payload.data.decode('UTF-8')
-
-
-# # Gantilah 'my-api-key' dengan nama secret Anda
-# API_KEY = get_secret('my-api-key')
+# Load environment variables from .env file (opsional, terutama untuk pengembangan lokal)
 load_dotenv()
-API_KEY = os.getenv("API_KEY")
 
+# Fungsi untuk mengakses secret dari Secret Manager
+
+
+def get_secret(secret_name):
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+        project_id = os.getenv('PROJECT_ID')
+        if not project_id:
+            raise ValueError("PROJECT_ID environment variable is not set.")
+
+        secret_version = f'projects/{project_id}/secrets/{secret_name}/versions/latest'
+        response = client.access_secret_version(name=secret_version)
+        return response.payload.data.decode('UTF-8')
+    except Exception as e:
+        print(f"Error accessing secret {secret_name}: {e}")
+        return None
+
+
+# Mengambil secrets
+API_KEY = get_secret('API_KEY')
+PROJECT_ID = get_secret('PROJECT_ID')
+LOCATION = get_secret('LOCATION')
 
 # Load models
-MODEL_PATH_XCEPTION = "model/model_xception.keras"
-MODEL_PATH_INCEPTION = "model\InceptionV3.keras"
-model_xception = tf.keras.models.load_model(MODEL_PATH_XCEPTION, compile=False)
-model_inception = tf.keras.models.load_model(
-    MODEL_PATH_INCEPTION, compile=False)
+MODEL_PATH = "model/model_xception.keras"
+MODEL_PATH = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
-# Configure the API key
-genai.configure(api_key=API_KEY)
+# Configure Vertex AI
+vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # Create the model
 generation_config = {
@@ -97,29 +106,80 @@ def allowed_file(filename):
 # Preprocess image function
 
 
-def preprocess_image(image_path, model_name):
-    img = load_img(image_path, target_size=(299, 299)
-                   if model_name == "inceptionV3" else (300, 300))
+def preprocess_image(image_path):
+    img = load_img(image_path, target_size=(300, 300))
     img_array = img_to_array(img)  # Konversi gambar menjadi array
     img_array = np.expand_dims(img_array, axis=0)  # Tambah dimensi batch
-    if model_name == "inceptionV3":
-        img_array /= 255.0  # Preprocessing sesuai InceptionV3
-    else:
-        img_array = xception_preprocess_input(
-            img_array)  # Preprocessing sesuai Xception
+    img_array = xception_preprocess_input(
+        img_array)  # Preprocessing sesuai Xception
     return img_array
 
 # Decode prediction function
 
 
 def decode_prediction(prediction):
-    # Ambil indeks kelas dengan probabilitas tertinggi
     predicted_class_index = np.argmax(prediction)
     predicted_class = class_names[predicted_class_index]  # Ambil nama kelas
     confidence = prediction[0][predicted_class_index] * \
         100
     confidence = round(confidence, 1)
     return predicted_class, confidence
+
+# Function to call Vertex AI Language Model
+
+
+def call_vertex_ai(text):
+    model = GenerativeModel(
+        model_name="gemini-1.0-pro",
+        system_instruction="""Makanan:\n\n
+        Anda adalah asisten pintar berbahasa Indonesia yang ahli dalam menghitung jejak karbon dari makanan atau struk makanan dan breakdown bahan bahan pada makanan nya lalu cocokan bahan bahan itu dengan yang ada dalam data emisi yg saya berikan di bawah. Berikut adalah instruksi untuk tugas Anda:\n\n
+        1. Identifikasi Makanan:
+           - Tentukan apakah item makanan bersifat vegetarian atau non-vegetarian.
+           - Buat daftar bahan makanan beserta klasifikasinya (veg/non-veg) yang ada dalam data karbon emisi yg saya berikan saja yg kamu tampilkan.\n\n
+        2. Rincian Emisi Karbon:
+           - Hitung emisi karbon berdasarkan faktor seperti pertanian, pengolahan, makanan hewa transportasi, ritel, pengemasan, kerugian, dan penggunaan lahan.
+           - Daftar bahan makanan yang ada dalam data karbon emisi yang saya berikan saja yang kamu tampilkan.\n\n
+        3. Rincian Emisi Karbon per Makanan:
+           - Jika ada beberapa jenis makanan, beri rincian emisi karbon secara terpisah.
+           - Tampilkan total emisi karbon dalam tabel ringkas.\n\n
+        4. Saran Keberlanjutan:
+           - Berikan saran terkait keberlanjutan dan pengurangan jejak karbon, seperti:
+             - 🌱 Belilah makanan secukupnya.
+             - 🌍 Pilih produk lokal.
+             - 🍃 Pilih makanan organik.
+             - ♻️ Gunakan kemasan ramah lingkungan.\n\n
+        5. Fakta Keberlanjutan:
+           - Sertakan fakta penting tentang jejak karbon makanan (contoh: "Tahu memiliki jejak karbon 10x lebih rendah daripada daging sapi.")\n\n
+        6. - Berikan kutipan yang menginspirasi tentang pentingnya mengurangi jejak karbon makanan untuk perubahan iklim.\n\n
+        Referensi Data untuk Perhitungan Emisi:
+        (Data emisi karbon seperti apel, pisang, daging sapi, dsb.)
+        """,
+        safety_settings=[
+            SafetySetting(
+                category=SafetySetting.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=SafetySetting.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+            ),
+            SafetySetting(
+                category=SafetySetting.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=SafetySetting.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+            ),
+            SafetySetting(
+                category=SafetySetting.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=SafetySetting.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+            ),
+            SafetySetting(
+                category=SafetySetting.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=SafetySetting.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+            ),
+        ]
+    )
+    response = model.predict(
+        text,
+        max_output_tokens=800,
+        temperature=1,
+        top_p=1
+    )
+    return response.text
 
 
 @app.route("/", methods=["GET"])
@@ -145,53 +205,21 @@ def predict_image():
         }), 400
 
     image = request.files["image"]
-    model_choice = request.form.get(
-        'model', 'inception')
     if image and allowed_file(image.filename):
         filename = secure_filename(image.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         image.save(file_path)  # Simpan gambar
 
         # Preprocess the image
-        img_array = preprocess_image(file_path, model_choice)
-
-        # Choose model based on user input
-        if model_choice == "inceptionV3":
-            model = model_inception
-        else:
-            model = model_xception
+        img_array = preprocess_image(file_path)
 
         # Start timing prediction
         start_predict_time = time.time()
 
         # Predict the image
-        prediction = model.predict(img_array)
+        prediction = MODEL_PATH.predict(img_array)
         predicted_class, confidence = decode_prediction(prediction)
-        text = f"""**Makanan:** {predicted_class}\n\n
-        Anda adalah asisten pintar berbahasa Indonesia yang ahli dalam menghitung jejak karbon dari makanan atau struk makanan dan breakdown bahan bahan pada makanan nya lalu cocokan bahan bahan itu dengan yang ada dalam data emisi yg saya berikan di bawah. Berikut adalah instruksi untuk tugas Anda:\n\n
-        1. **Identifikasi Makanan**:
-           - Tentukan apakah item makanan bersifat vegetarian atau non-vegetarian.
-           - Buat daftar bahan makanan beserta klasifikasinya (veg/non-veg) yang ada dalam data karbon emisi yg saya berikan saja yg kamu tampilkan.\n\n
-        2. **Rincian Emisi Karbon**:
-           - Hitung emisi karbon berdasarkan faktor seperti pertanian, pengolahan, transportasi, ritel, pengemasan, kerugian, dan penggunaan lahan.
-           - Daftar bahan makanan yang ada dalam data karbon emisi yang saya berikan saja yang kamu tampilkan.\n\n
-        3. **Rincian Emisi Karbon per Makanan**:
-           - Jika ada beberapa jenis makanan, beri rincian emisi karbon secara terpisah.
-           - Tampilkan total emisi karbon dalam tabel ringkas.\n\n
-        4. **Saran Keberlanjutan**:
-           - Berikan saran terkait keberlanjutan dan pengurangan jejak karbon, seperti:
-             - 🌱 Belilah makanan secukupnya.
-             - 🌍 Pilih produk lokal.
-             - 🍃 Pilih makanan organik.
-             - ♻️ Gunakan kemasan ramah lingkungan.\n\n
-        5. **Fakta Keberlanjutan**:
-           - Sertakan fakta penting tentang jejak karbon makanan (contoh: "Tahu memiliki jejak karbon 10x lebih rendah daripada daging sapi.")\n\n
-        6. - Berikan kutipan yang menginspirasi tentang pentingnya mengurangi jejak karbon makanan untuk perubahan iklim.\n\n
-        **Referensi Data untuk Perhitungan Emisi**:
-        (Data emisi karbon seperti apel, pisang, daging sapi, dsb.)
-        """
-        responsegenai = chat_session.send_message(text)
-        generated_text = responsegenai.text
+        generated_text = call_vertex_ai(predicted_class)
         # End timing prediction
         end_predict_time = time.time()
         predict_time = end_predict_time - start_predict_time
