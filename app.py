@@ -15,17 +15,19 @@ app = Flask(__name__)
 
 # Mengakses API Key dari Secret Manager
 
+# def get_secret(secret_name):
+#     client = secretmanager.SecretManagerServiceClient()
+#     project_id = 'your-project-id'
+#     secret_version = f'projects/{project_id}/secrets/{secret_name}/versions/latest'
+#     response = client.access_secret_version(name=secret_version)
+#     return response.payload.data.decode('UTF-8')
 
-def get_secret(secret_name):
-    client = secretmanager.SecretManagerServiceClient()
-    project_id = 'your-project-id'
-    secret_version = f'projects/{project_id}/secrets/{secret_name}/versions/latest'
-    response = client.access_secret_version(name=secret_version)
-    return response.payload.data.decode('UTF-8')
 
+# # Gantilah 'my-api-key' dengan nama secret Anda
+# API_KEY = get_secret('my-api-key')
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 
-# Gantilah 'my-api-key' dengan nama secret Anda
-API_KEY = get_secret('my-api-key')
 
 # Load models
 MODEL_PATH_XCEPTION = "model/model_xception.keras"
@@ -42,7 +44,7 @@ generation_config = {
     "temperature": 1,
     "top_p": 0.95,
     "top_k": 64,
-    "max_output_tokens": 8192,
+    "max_output_tokens": 750,
     "response_mime_type": "text/plain",
 }
 
